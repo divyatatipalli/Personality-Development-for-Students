@@ -4,6 +4,10 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
+from zipfile import ZipFile, ZIP_DEFLATED
+from lxml import etree
+import os
+import tempfile
 
 
 prs = Presentation()
@@ -352,4 +356,30 @@ add_text(slide, "THANK YOU", 1.25, 6.35, 3.0, 0.28, 11, MUTED, True)
 
 output = "Personality_Development_for_Students.pptx"
 prs.save(output)
+
+
+def add_slide_animations(pptx_path):
+    P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+    ns = {"p": P_NS}
+    fd, temp_path = tempfile.mkstemp(suffix=".pptx")
+    os.close(fd)
+    with ZipFile(pptx_path, "r") as source, ZipFile(temp_path, "w", ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename.startswith("ppt/slides/slide") and item.filename.endswith(".xml"):
+                root = etree.fromstring(data)
+                for old in root.xpath("./p:transition", namespaces=ns):
+                    root.remove(old)
+                transition = etree.Element("{%s}transition" % P_NS)
+                transition.set("spd", "med")
+                transition.set("advClick", "1")
+                fade = etree.SubElement(transition, "{%s}fade" % P_NS)
+                root.insert(1, transition)
+                data = etree.tostring(root, xml_declaration=True, encoding="UTF-8",
+                                      standalone=True)
+            target.writestr(item, data)
+    os.replace(temp_path, pptx_path)
+
+
+add_slide_animations(output)
 print(output)
